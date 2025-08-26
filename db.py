@@ -1,6 +1,4 @@
 # Preloaded data
-
-# 10 students with name and id
 students = {
     "S001": {"student_name": "Mounika", "in_time": None, "out_time": None, "borrowed_books": []},
     "S002": {"student_name": "Ravi", "in_time": None, "out_time": None, "borrowed_books": []},
@@ -14,7 +12,6 @@ students = {
     "S010": {"student_name": "Rahul", "in_time": None, "out_time": None, "borrowed_books": []}
 }
 
-# 10 books with id and availability
 books = {
     "B101": {"book_name": "Python Basics", "available": "Yes"},
     "B102": {"book_name": "Flask Web Dev", "available": "Yes"},
@@ -28,9 +25,12 @@ books = {
     "B110": {"book_name": "Electronics Fundamentals", "available": "Yes"}
 }
 
-# 3 librarians with id and name
 librarians = {
     "L001": {"librarian_name": "Ramesh"},
     "L002": {"librarian_name": "Suresh"},
     "L003": {"librarian_name": "Geetha"}
+}
+API_KEYS = {
+    "admin_key": "admin123",   
+    "staff_key": "staff123"     
 }
