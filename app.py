@@ -25,7 +25,6 @@ def require_role(role="admin"):
         return wrapper
     return decorator
 
-
 #Student Entry
 @app.post("/student_entry")
 def student_entry():
@@ -69,6 +68,7 @@ def student_exit():
         "student_id": student_id,
         "out_time": students[student_id]["out_time"]
     }
+
 # students who have entered and left
 @app.route("/library_entries", methods=["GET"])
 def view_library_entries():
@@ -195,6 +195,7 @@ def students_books():
     if not all_students_books:
         return jsonify({"message": "No students found"}), 200
     return jsonify({"students_books": all_students_books}), 200
+
 # Members and their IDs
 @app.route("/members", methods=["GET"])
 def get_members():
@@ -207,7 +208,6 @@ def get_members():
         return jsonify({"message": "No members found"}), 200
 
     return jsonify({"members": members_list}), 200
-
 
 # Books currently issued (borrowed)
 @app.route("/issued_books", methods=["GET"])
@@ -227,6 +227,7 @@ def get_issued_books():
         return jsonify({"message": "No books are currently issued"}), 200
 
     return jsonify({"issued_books": issued_books_list}), 200
+
 # Available books
 @app.route("/available_books", methods=["GET"])
 def get_available_books():
@@ -287,6 +288,7 @@ def get_student_fines(student_id):
         return {"message": f"No fines pending for student {student_id}"}, 200
 
     return {"fines": fines_list}, 200
+
 # View all students with fines
 @app.route("/students_fines", methods=["GET"])
 def students_fines():
@@ -403,7 +405,5 @@ def remove_librarian(librarian_id):
     removed = librarians.pop(librarian_id)
     return jsonify({"message": f"Librarian {removed['name']} removed"})
 
-
 if __name__ == "__main__":
     app.run(debug=True)
-
