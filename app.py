@@ -195,6 +195,50 @@ def students_books():
     if not all_students_books:
         return jsonify({"message": "No students found"}), 200
     return jsonify({"students_books": all_students_books}), 200
+# Members and their IDs
+@app.route("/members", methods=["GET"])
+def get_members():
+    members_list = [
+        {"student_id": sid, "student_name": info["student_name"]}
+        for sid, info in students.items()
+    ]
+
+    if not members_list:
+        return jsonify({"message": "No members found"}), 200
+
+    return jsonify({"members": members_list}), 200
+
+
+# Books currently issued (borrowed)
+@app.route("/issued_books", methods=["GET"])
+def get_issued_books():
+    issued_books_list = []
+    for sid, info in students.items():
+        for book in info.get("borrowed_books", []):
+            if book["status"] == "Borrowed":
+                issued_books_list.append({
+                    "book_id": book["book_id"],
+                    "book_name": book["book_name"],
+                    "borrowed_by_id": sid,
+                    "borrowed_by_name": info["student_name"]
+                })
+
+    if not issued_books_list:
+        return jsonify({"message": "No books are currently issued"}), 200
+
+    return jsonify({"issued_books": issued_books_list}), 200
+# Available books
+@app.route("/available_books", methods=["GET"])
+def get_available_books():
+    available_books_list = [
+        {"book_id": bid, "book_name": info["book_name"]}
+        for bid, info in books.items() if info["available"] == "Yes"
+    ]
+
+    if not available_books_list:
+        return jsonify({"message": "No books are currently available"}), 200
+
+    return jsonify({"available_books": available_books_list}), 200
 
 #if book is missing
 @app.put("/missing_book")
@@ -265,6 +309,7 @@ def students_fines():
     if not students_with_fines:
         return jsonify({"message": "No fines pending"}), 200
     return jsonify({"students_with_fines": students_with_fines}), 200
+
 #Student Management
 #registering membership - admin only
 @app.route("/register_student", methods=["POST"])
