@@ -313,16 +313,17 @@ def students_fines():
     return jsonify({"students_with_fines": students_with_fines}), 200
 
 #Student Management
-#registering membership - admin only
+# Registering membership - admin only
 @app.route("/register_student", methods=["POST"])
 @require_role("admin")
 def register_student():
     data = request.json
     student_id = data.get("student_id")
     student_name = data.get("student_name")
+    password = data.get("password")  # get password from request
 
-    if not student_id or not student_name:
-        return jsonify({"error": "student_id and student_name required"}), 400
+    if not student_id or not student_name or not password:
+        return jsonify({"error": "student_id, student_name, and password are required"}), 400
 
     if student_id in students:
         return jsonify({"error": "Student ID already exists"}), 400
@@ -330,31 +331,56 @@ def register_student():
     students[student_id] = {
         "student_name": student_name,
         "borrowed_books": [],
-        "fine": 0
+        "fine": 0,
+        "password": password  # store password
     }
-    return jsonify({"message": f"Student {student_name} registered successfully", "student_id": student_id})
 
-# Declining membership - admin only
+    # Mask password in response
+    response_student = students[student_id].copy()
+    response_student["password"] = "#"
+
+    return jsonify({"message": f"Student {student_name} registered successfully",
+                    "student": response_student})
+
+# Declining membership - admin only or student self-request
 @app.route("/remove_student/<student_id>", methods=["DELETE"])
-@require_role("admin")
 def remove_student(student_id):
+    data = request.json
+    password = data.get("password")  # password provided by student
+    is_admin = request.headers.get("X-API-KEY") == API_KEYS.get("admin_key")  # check admin
+
     if student_id not in students:
         return jsonify({"error": "Student not found"}), 404
 
     student = students[student_id]
 
-    if student.get("fine", 0) > 0:
+    # Admin override → can remove regardless of fine or password
+    if is_admin:
+        students.pop(student_id)
         return jsonify({
-            "error": f"Cannot remove student {student_id}. Pending fine: {student['fine']}"
+            "message": f"Student {student_id} membership declined by admin",
+            "fine": student.get("fine", 0)
+        })
+
+    # Student self-request → check password
+    if not password or password != student.get("password"):
+        return jsonify({"error": "Password incorrect"}), 403
+
+    # Check fine
+    if student.get("fine", 0) == 0:
+        # Fine is zero → remove automatically
+        students.pop(student_id)
+        return jsonify({
+            "message": f"Student {student_id} membership declined successfully (no pending fine)",
+            "fine": 0
+        })
+    else:
+        # Fine > 0 → cannot remove automatically, must contact admin
+        return jsonify({
+            "message": f"Cannot remove student {student_id}. Pending fine: {student['fine']}. Please contact admin.",
+            "fine": student.get("fine", 0)
         }), 400
-
-    # Fine is zero, remove student
-    students.pop(student_id)
-    return jsonify({
-        "message": f"Student {student_id} membership declined successfully (no pending fine)",
-        "fine": 0
-    })
-
+    
 #Book Management
 # Adding book - admin only
 @app.route("/add_book", methods=["POST"])
