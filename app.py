@@ -357,7 +357,7 @@ def register_student():
 
 # Declining membership - admin only or student self-request
 @app.route("/remove_student/<student_id>", methods=["DELETE"])
-@app.route("/decline/<student_id>", methods=["DELETE"])
+@app.route("/decline/<student_id>", methods=["DELETE"])  
 def remove_student(student_id):
     data = request.json
     password = data.get("password")  # password provided by student
@@ -469,30 +469,42 @@ def delete_book_admin(book_id):
     deleted = books.pop(book_id)
     return jsonify({"message": f"Book {book_id} deleted successfully", "deleted": deleted})
 
+
 # Librarian Management
-# Adding librarian - admin only
+# Add librarian - admin only
 @app.route("/add_librarian", methods=["POST"])
 @require_role("admin")
 def add_librarian():
     data = request.json
     librarian_id = data.get("librarian_id")
-    name = data.get("name")
-    email = data.get("email")
+    librarian_name = data.get("librarian_name")
+
+    if not librarian_id or not librarian_name:
+        return jsonify({"error": "librarian_id and librarian_name are required"}), 400
 
     if librarian_id in librarians:
         return jsonify({"error": "Librarian ID already exists"}), 400
 
-    librarians[librarian_id] = {"name": name, "email": email, "role": "staff"}
-    return jsonify({"message": f"Librarian {name} added successfully"}), 201
+    librarians[librarian_id] = {"librarian_name": librarian_name}
+    return jsonify({"message": f"Librarian {librarian_name} added successfully"}), 201
 
-# Removing librarian - admin only
+# Remove librarian - admin only
 @app.route("/remove_librarian/<librarian_id>", methods=["DELETE"])
 @require_role("admin")
 def remove_librarian(librarian_id):
     if librarian_id not in librarians:
         return jsonify({"error": "Librarian not found"}), 404
+    
     removed = librarians.pop(librarian_id)
-    return jsonify({"message": f"Librarian {removed['name']} removed"})
+    return jsonify({"message": f"Librarian {removed['librarian_name']} removed"})
+
+
+# List all librarians 
+@app.route("/list_librarians", methods=["GET"])
+def list_librarians():
+    result = [{"librarian_id": lid, "librarian_name": info["librarian_name"]} 
+              for lid, info in librarians.items()]
+    return jsonify({"librarians": result})
 
 # Main function
 if __name__ == "__main__":
