@@ -5,14 +5,15 @@ from db import students, books, librarians, API_KEYS
 
 app = Flask(__name__)
 
-def require_role(role="admin"):
-    def decorator(f):
-        @wraps(f)
-        def wrapper(*args, **kwargs):
+# Role-Based Access 
+def require_role(role="admin"):             # Outer function, takes role argument (default = "admin")
+    def decorator(f):                       # Actual decorator that wraps a route function
+        @wraps(f)                           # Preserves original function name/docs
+        def wrapper(*args, **kwargs):       # The new wrapped function
             api_key = request.headers.get("X-API-KEY")
             if not api_key or api_key not in API_KEYS.values():
                 return jsonify({"error": "Unauthorized - API Key required"}), 401
-
+            
             # Admin-only routes
             if role == "admin" and api_key != API_KEYS["admin_key"]:
                 return jsonify({"error": "Forbidden - Admin access only"}), 403
@@ -21,7 +22,7 @@ def require_role(role="admin"):
         return wrapper
     return decorator
 
-#Student Entry
+# Student Entry
 @app.post("/student_entry")
 def student_entry():
     data = request.get_json()
@@ -42,7 +43,7 @@ def student_entry():
         "in_time": students[student_id]["in_time"]
     }
 
-#Student Exit
+# Student Exit
 @app.put("/student_exit")
 def student_exit():
     data = request.get_json()
@@ -65,7 +66,7 @@ def student_exit():
         "out_time": students[student_id]["out_time"]
     }
 
-# students who have entered and left
+# Students who have entered and left
 @app.route("/library_entries", methods=["GET"])
 def view_library_entries():
 
@@ -83,7 +84,7 @@ def view_library_entries():
 
     return jsonify({"entered_students": entered_students}), 200
 
-#  Borrowing book
+# Borrowing book
 @app.post("/borrow_book")
 def borrow_book():
     data = request.get_json()
@@ -121,13 +122,14 @@ def borrow_book():
         "borrowed_book": record
     }
 
+# Book count each member has
 @app.route("/count/<student_id>", methods=["GET"])
 def get_book_count(student_id):
     if student_id not in students:
         return jsonify({"error": "Student ID not found"}), 404
 
     student = students[student_id]
-    book_count = len(student["borrowed_books"])  # now reflects only active borrows
+    book_count = len(student["borrowed_books"])  
 
     return jsonify({
         "student_id": student_id,
@@ -135,7 +137,6 @@ def get_book_count(student_id):
         "book_count": book_count,
         "borrowed_books": student["borrowed_books"]
     })
-
 
 # Returning Book
 @app.put("/return_book")
@@ -165,7 +166,7 @@ def return_book():
             book["date_of_returning"] = actual_return_date
             books[book_id]["available"] = "Yes"
 
-            # 👇 Remove returned book from student's borrowed list
+            # Remove returned book from student's borrowed list
             borrowed_books.remove(book)
 
             return {
@@ -176,8 +177,7 @@ def return_book():
 
     return {"message": "Book not found in student's borrowed list"}, 404
 
-
-#  Enquiry Books
+# Enquiry Books
 @app.get("/book_enquiry/<book_id>")
 def book_enquiry(book_id):
     if book_id not in books:
@@ -187,7 +187,7 @@ def book_enquiry(book_id):
     else:
         return {"message": f"Book {book_id} - {books[book_id]['book_name']} is NOT available"}
 
-# books and student details
+# Books and Student Details
 @app.route("/students_books", methods=["GET"])
 def students_books():
     all_students_books = {}
@@ -208,10 +208,19 @@ def get_members():
         for sid, info in students.items()
     ]
 
-    if not members_list:
-        return jsonify({"message": "No members found"}), 200
+    total_members = len(members_list)
 
-    return jsonify({"members": members_list}), 200
+    if not members_list:
+        return jsonify({
+            "total_members": 0,
+            "message": "No members found"
+        }), 200
+
+    return jsonify({
+        "total_members": total_members,
+        "members": members_list
+    }), 200
+
 
 # Books currently issued (borrowed)
 @app.route("/issued_books", methods=["GET"])
@@ -232,7 +241,7 @@ def get_issued_books():
 
     return jsonify({"issued_books": issued_books_list}), 200
 
-# Available books
+# Available Books
 @app.route("/available_books", methods=["GET"])
 def get_available_books():
     available_books_list = [
@@ -245,7 +254,7 @@ def get_available_books():
 
     return jsonify({"available_books": available_books_list}), 200
 
-#if book is missing
+# If Book is Missing
 @app.put("/missing_book")
 def missing_book():
     data = request.get_json()
@@ -265,7 +274,7 @@ def missing_book():
 
     return {"message": "Book not found in student's borrowed list"}, 404
 
-#checking fines
+ # Checking Fines
 @app.get("/fines/<student_id>")
 def get_student_fines(student_id):
     # Check if student exists
@@ -316,7 +325,7 @@ def students_fines():
         return jsonify({"message": "No fines pending"}), 200
     return jsonify({"students_with_fines": students_with_fines}), 200
 
-#Student Management
+# Student Management
 # Registering membership - admin only
 @app.route("/register_student", methods=["POST"])
 @require_role("admin")
@@ -348,6 +357,7 @@ def register_student():
 
 # Declining membership - admin only or student self-request
 @app.route("/remove_student/<student_id>", methods=["DELETE"])
+@app.route("/decline/<student_id>", methods=["DELETE"])
 def remove_student(student_id):
     data = request.json
     password = data.get("password")  # password provided by student
@@ -358,7 +368,7 @@ def remove_student(student_id):
 
     student = students[student_id]
 
-    # 🔑 Calculate total fines from all borrowed books
+    # Calculate total fines from all borrowed books
     total_fine = sum(book.get("fine", 0) for book in student["borrowed_books"])
 
     # Admin override → can remove regardless of fine or password
@@ -388,6 +398,7 @@ def remove_student(student_id):
             "fine": total_fine
         }), 400
 
+# Paying Fine
 @app.put("/pay_fine/<student_id>")
 def pay_fine(student_id):
     if student_id not in students:
@@ -433,7 +444,7 @@ def pay_fine(student_id):
         "remaining_fine": new_total_fine
     }), 200
     
-#Book Management
+# Book Management
 # Adding book - admin only
 @app.route("/add_book", methods=["POST"])
 @require_role("admin")
@@ -458,8 +469,8 @@ def delete_book_admin(book_id):
     deleted = books.pop(book_id)
     return jsonify({"message": f"Book {book_id} deleted successfully", "deleted": deleted})
 
-#librarian Management
-#adding librarian
+# Librarian Management
+# Adding librarian - admin only
 @app.route("/add_librarian", methods=["POST"])
 @require_role("admin")
 def add_librarian():
@@ -474,7 +485,7 @@ def add_librarian():
     librarians[librarian_id] = {"name": name, "email": email, "role": "staff"}
     return jsonify({"message": f"Librarian {name} added successfully"}), 201
 
-#removing librarian
+# Removing librarian - admin only
 @app.route("/remove_librarian/<librarian_id>", methods=["DELETE"])
 @require_role("admin")
 def remove_librarian(librarian_id):
@@ -483,5 +494,6 @@ def remove_librarian(librarian_id):
     removed = librarians.pop(librarian_id)
     return jsonify({"message": f"Librarian {removed['name']} removed"})
 
+# Main function
 if __name__ == "__main__":
     app.run(debug=True)
