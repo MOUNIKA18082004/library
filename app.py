@@ -17,10 +17,6 @@ def require_role(role="admin"):
             if role == "admin" and api_key != API_KEYS["admin_key"]:
                 return jsonify({"error": "Forbidden - Admin access only"}), 403
 
-            # Staff or Admin routes
-            if role == "staff" and api_key not in [API_KEYS["admin_key"], API_KEYS["staff_key"]]:
-                return jsonify({"error": "Forbidden - Staff/Admin only"}), 403
-
             return f(*args, **kwargs)
         return wrapper
     return decorator
@@ -125,14 +121,13 @@ def borrow_book():
         "borrowed_book": record
     }
 
-# Book Count 
 @app.route("/count/<student_id>", methods=["GET"])
 def get_book_count(student_id):
     if student_id not in students:
         return jsonify({"error": "Student ID not found"}), 404
 
     student = students[student_id]
-    book_count = len(student["borrowed_books"])
+    book_count = len(student["borrowed_books"])  # now reflects only active borrows
 
     return jsonify({
         "student_id": student_id,
@@ -141,7 +136,8 @@ def get_book_count(student_id):
         "borrowed_books": student["borrowed_books"]
     })
 
-#  Returning  Book
+
+# Returning Book
 @app.put("/return_book")
 def return_book():
     data = request.get_json()
@@ -169,9 +165,17 @@ def return_book():
             book["date_of_returning"] = actual_return_date
             books[book_id]["available"] = "Yes"
 
-            return book
+            # 👇 Remove returned book from student's borrowed list
+            borrowed_books.remove(book)
+
+            return {
+                "message": "Book returned successfully",
+                "book_id": book_id,
+                "fine": book["fine"]
+            }
 
     return {"message": "Book not found in student's borrowed list"}, 404
+
 
 #  Enquiry Books
 @app.get("/book_enquiry/<book_id>")
@@ -354,12 +358,15 @@ def remove_student(student_id):
 
     student = students[student_id]
 
+    # 🔑 Calculate total fines from all borrowed books
+    total_fine = sum(book.get("fine", 0) for book in student["borrowed_books"])
+
     # Admin override → can remove regardless of fine or password
     if is_admin:
         students.pop(student_id)
         return jsonify({
             "message": f"Student {student_id} membership declined by admin",
-            "fine": student.get("fine", 0)
+            "fine": total_fine
         })
 
     # Student self-request → check password
@@ -367,7 +374,7 @@ def remove_student(student_id):
         return jsonify({"error": "Password incorrect"}), 403
 
     # Check fine
-    if student.get("fine", 0) == 0:
+    if total_fine == 0:
         # Fine is zero → remove automatically
         students.pop(student_id)
         return jsonify({
@@ -377,9 +384,54 @@ def remove_student(student_id):
     else:
         # Fine > 0 → cannot remove automatically, must contact admin
         return jsonify({
-            "message": f"Cannot remove student {student_id}. Pending fine: {student['fine']}. Please contact admin.",
-            "fine": student.get("fine", 0)
+            "message": f"Cannot remove student {student_id}. Pending fine: {total_fine}. Please contact admin.",
+            "fine": total_fine
         }), 400
+
+@app.put("/pay_fine/<student_id>")
+def pay_fine(student_id):
+    if student_id not in students:
+        return jsonify({"error": "Student not found"}), 404
+
+    student = students[student_id]
+
+    # Calculate total fine
+    total_fine = sum(book.get("fine", 0) for book in student["borrowed_books"])
+
+    if total_fine == 0:
+        return jsonify({"message": "No fine pending"}), 200
+
+    # Get payment amount from request body
+    data = request.json
+    amount = data.get("amount")
+
+    if not amount or amount <= 0:
+        return jsonify({"error": "Please provide a valid payment amount"}), 400
+
+    if amount > total_fine:
+        return jsonify({"error": f"Payment exceeds pending fine. Pending fine is {total_fine}"}), 400
+
+    # Deduct amount from fines (distribute across borrowed books)
+    remaining = amount
+    for book in student["borrowed_books"]:
+        if book["fine"] > 0 and remaining > 0:
+            if remaining >= book["fine"]:
+                remaining -= book["fine"]
+                book["fine"] = 0
+            else:
+                book["fine"] -= remaining
+                remaining = 0
+
+    # Recalculate total fine after payment
+    new_total_fine = sum(book.get("fine", 0) for book in student["borrowed_books"])
+
+    return jsonify({
+        "message": f"Payment successful. Paid {amount}.",
+        "student_id": student_id,
+        "student_name": student["student_name"],
+        "paid_amount": amount,
+        "remaining_fine": new_total_fine
+    }), 200
     
 #Book Management
 # Adding book - admin only
